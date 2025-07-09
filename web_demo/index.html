@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>외국인등록증 뒷면 분류기</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0/dist/tf.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            margin: 30px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+            transform: translateY(-2px);
+        }
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e8f2ff;
+            transform: scale(1.02);
+        }
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+        #imagePreview {
+            max-width: 100%;
+            max-height: 400px;
+            margin: 20px auto;
+            display: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        .result {
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+            font-size: 1.1em;
+            font-weight: 600;
+            text-align: center;
+        }
+        .result.success {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+        .result.error {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            border: none;
+        }
+        .progress {
+            width: 100%;
+            height: 25px;
+            background-color: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+            display: none;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            text-align: center;
+            color: white;
+            line-height: 25px;
+            font-weight: 600;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .webcam-container {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 15px;
+        }
+        #webcam {
+            max-width: 100%;
+            border-radius: 10px;
+            display: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        .info {
+            background: linear-gradient(135deg, #e8f2ff 0%, #f0f4ff 100%);
+            border: 1px solid #d1e7ff;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        .info h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        .info ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .info li {
+            margin: 8px 0;
+            color: #555;
+        }
+        .button-group {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .confidence-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .confidence-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-loading { background-color: #ffa500; }
+        .status-ready { background-color: #4caf50; }
+        .status-error { background-color: #f44336; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>외국인등록증 뒷면 분류기</h1>
+        <p class="subtitle">AI 기반 실시간 문서 검증 시스템</p>
+        
+        <div class="info">
+            <h3>🚀 사용법</h3>
+            <ul>
+                <li>📁 이미지 파일을 드래그 앤 드롭하거나 파일 선택 버튼을 클릭하세요</li>
+                <li>📷 웹캠을 사용하여 실시간으로 촬영할 수도 있습니다</li>
+                <li>🔍 외국인등록증 뒷면인지 자동으로 판별됩니다</li>
+                <li>⚡ 모든 처리는 브라우저에서 실시간으로 수행됩니다</li>
+            </ul>
+        </div>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📷</div>
+            <p style="font-size: 1.2em; font-weight: 600; margin: 0;">이미지를 여기에 드래그하거나 클릭하여 파일을 선택하세요</p>
+            <p style="color: #888; margin-top: 10px;">JPG, PNG 파일 지원</p>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        </div>
+        
+        <div class="webcam-container">
+            <h3 style="margin-bottom: 15px; color: #667eea;">📹 웹캠 촬영</h3>
+            <button id="startWebcam">웹캠 시작</button>
+            <button id="stopWebcam" style="display: none;">웹캠 중지</button>
+            <button id="capturePhoto" style="display: none;">📸 사진 촬영</button>
+            <br><br>
+            <video id="webcam" autoplay muted></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+        
+        <div style="text-align: center;">
+            <img id="imagePreview" alt="Preview">
+        </div>
+        
+        <div class="progress" id="progress">
+            <div class="progress-bar" id="progressBar">
+                <span id="modelStatus">🤖 AI 모델 로딩 중...</span>
+            </div>
+        </div>
+        
+        <div class="result" id="result">
+            <div id="resultText"></div>
+            <div class="confidence-bar" id="confidenceBar" style="display: none;">
+                <div class="confidence-fill" id="confidenceFill"></div>
+            </div>
+            <div id="confidenceText" style="margin-top: 10px; font-size: 0.9em;"></div>
+        </div>
+        
+        <div class="button-group">
+            <button id="analyzeBtn" style="display: none;">🔍 분석하기</button>
+            <button id="clearBtn" style="display: none;">🗑️ 초기화</button>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px; color: #888; font-size: 0.9em;">
+            <span class="status-indicator" id="statusIndicator"></span>
+            <span id="statusText">모델 로딩 중...</span>
+        </div>
+    </div>
+    
+    <script src="classifier.js"></script>
+</body>
+</html>
